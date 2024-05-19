@@ -1,0 +1,16 @@
+{
+  "name": "mcchatgptbot",
+  "version": "1.0.0",
+  "description": "A minecraft chatgpt bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "TLme",
+  "license": "MIT",
+  "dependencies": {
+    "lowdb": "^1.0.0",
+    "mineflayer": "^4.20.1",
+    "openai": "^4.47.1"
+  }
+}
