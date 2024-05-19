@@ -1,0 +1,2 @@
+# MCChatGPTBot
+一个在Minecraft中使用ChatGPT进行聊天的bot
