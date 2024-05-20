@@ -1,9 +1,7 @@
 module.exports = {
     host: '127.0.0.1', // 填写服务器地址
-    
     port: 25565, //服务器端口
     username: '', // 如果使用正版登录填写你的邮箱
-
     auth: 'microsoft', // 选择微软验证
     version: '1.20.4', //游戏版本
     openaiAPIURL : "https://api.openai.com/v1",//OpenAIAPi地址
