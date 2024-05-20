@@ -63,9 +63,7 @@ const merge_string = (mess_spilt, location) => {
 
 
 //睡
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 //设定角色
 const set_role = (role, username) => {
     db.get('userinfo')
@@ -119,27 +117,28 @@ function deleteMessage(username) {
 //bot说话
 const bot_say = async (message) => {
     //字符串分割
-    const maxLength = 250;
     let result = [];
-    let start = 0;
-
-    //根据\n提前换行
-    while (start < message.length) {
-        let end = Math.min(start + maxLength, message.length);
-        let substr = message.slice(start, end);
-
-        let newlineIndex = substr.lastIndexOf('\n');
-        if (newlineIndex !== -1) {
-            end = start + newlineIndex;
-            substr = message.slice(start, end);
-            start = end + 1;  // 跳过换行符
+    let currentChunk = '';
+    
+    for (let i = 0; i < message.length; i++) {
+        if (message[i] === '\n') {
+            if (currentChunk.length > 0) {
+                result.push(currentChunk);
+                currentChunk = '';
+            }
         } else {
-            start = end;
+            currentChunk += message[i];
+            if (currentChunk.length === 250) {
+                result.push(currentChunk);
+                currentChunk = '';
+            }
         }
-
-        result.push(substr);
     }
-    console.log(result);
+    
+    if (currentChunk.length > 0) {
+        result.push(currentChunk);
+    }
+    console.log(result)
     //说话部分
     for (const part of result) {
         bot.chat(part);
@@ -374,7 +373,6 @@ const command = async (mess_spilt, username) => {
     //冻起来
     set_freeze(username, true);
 
-    console.log(mess_spilt);
     if (mess_spilt[1] != undefined) {
         //系统指令优先级最高
         switch (mess_spilt[1]) {
@@ -444,7 +442,7 @@ bot.on('chat', (username, message) => {
             };
         }
     }
-    console.log(username, mess_spilt[0].toLowerCase());
+    console.log(username, message);
 
 });
 
