@@ -3,7 +3,7 @@
 
 ## 如何安装
 ```
-1. 安装nodejs
+1. 安装nodejs (开发使用20.11)
 2. git clone https://github.com/TLMEMO/MCChatGPTBot
 3. cd ./MCChatGPTBot
 4. npm install
