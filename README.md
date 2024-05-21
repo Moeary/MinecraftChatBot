@@ -9,6 +9,8 @@
 4. npm install
 5. 根据需要修改config.js
 6. node index.js
+7. 修改生成的userdb.json，如果开启了白名单，在whitelist中写上允许的玩家。
+呼叫bot一次,生成角色的配置，并且将你的角色名那部分的配置里的"user"修改为"admin"来获取管理员权限。
 
 ```
 
@@ -27,6 +29,9 @@ chat 消息
 chat new 消息（可选）
 //新对话/新对话请求 比如chat new 你好
 
+chat channel
+//切换频道（频道分为公共和私有，对话分别独立，在私有频道使用bot时，bot的消息不会直接返回在公屏上，而是通过/tell来私聊告诉你。在public频道时，所有人都共用同一个聊天。）
+
 chat role 角色名称
 //切换角色
 
@@ -41,6 +46,20 @@ chat rolelist
 
 chat init
 //初始化个人档案
+
+//以下命令限制userGroup为admin的用户使用
+
+chat addwhitelist 用户名
+//添加用户至白名单（如果你有在设置中开启）
+
+chat removewhitelist 用户名
+//将用户名从白名单中移除
+
+chat setgroup 组的名称 用户名
+//设置用户至特定的组，组目前有三种，分别为"user","admin","block"。user组可以获得机器人的使用权限，但不能使用管理员的命令组，block组将无法使用机器人的任何功能。
+
+//另外，公共聊天频道只有管理员能进行撤销、更换角色、重新生成、开始新对话的操作。
+
 ```
 
 rolelist中可以修改/增加系统prompt 格式为：
@@ -51,3 +70,5 @@ rolelist中可以修改/增加系统prompt 格式为：
 
     },
 ```
+
+由于bot会使用私聊来私聊玩家,所以说请确保bot拥有使用 __/tell__ 的权限

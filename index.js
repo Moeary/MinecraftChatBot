@@ -7,17 +7,10 @@ const rolelist = require('./rolelist.json');
 const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 
-const adapter = new FileSync('./userdb.json');
-const db = low(adapter);
-
-db.defaults({ userinfo: {} }).write();
-
-//触发词
-
-
 let argument = {
+    whitelist: config.whitelist,
+    publicprompt: config.publicprompt,
     host: config.host,
-
     port: config.port,
     username: config.username,
     auth: config.auth,
@@ -26,9 +19,22 @@ let argument = {
     openaiKey: config.openaiKey,
     openaiModel: config.openaiModel,
     max_token: config.max_token,
+    max_memory: config.max_memory,
     temperature: config.temperature,
     extra_prompt: config.extra_prompt
 }
+
+
+const adapter = new FileSync('./userdb.json');
+const db = low(adapter);
+
+db.defaults({ "whitelist": [], "userinfo": { "serverPublicMessage": { "role": "默认", "message": [{ "role": "system", "content": argument.extra_prompt + rolelist[argument.publicprompt]["description"] }], "freeze": false } } }).write();
+
+
+//触发词
+
+
+
 
 const PlayerInfo = {
     host: argument.host, // 填写要连接的服务器地址
@@ -71,6 +77,46 @@ const set_role = (role, username) => {
         .assign({ 'message': [{ "role": "system", "content": argument.extra_prompt + rolelist[role]["description"] }] })
         .write();
 };
+
+//设置用户组
+const set_user_group = (group, username) => {
+    db.get('userinfo')
+        .get(username)
+        .assign({ "userGroup": group })
+        .write();
+};
+//指令设置用户组
+const set_user_group_command = (username, mess_spilt) => {
+    const setuser = mess_spilt[3];
+    const group = mess_spilt[2];
+    if (group === undefined || setuser === undefined) {
+        bot_say_whisper(username, "命令有误，请检查")
+        return;
+    }
+
+    is_new_user(setuser);
+    const grouplist = ["user", "admin", "block"];
+    if (!grouplist.some(element => group.toLowerCase().includes(element))) {
+        bot_say_whisper(username, "该用户组不存在");
+        return;
+    }
+
+    set_user_group(group, setuser);
+    bot_say_whisper(username, `已设置玩家${setuser}的用户组为${group}`)
+
+}
+
+//切换频道
+const switch_channel = (username) => {
+    const channel = db.get(`userinfo.${username}.channel`).value();
+    const set_channel = channel === "public" ? "private" : "public";
+    db.get('userinfo')
+        .get(username)
+        .assign({ "channel": set_channel })
+        .write();
+    bot_say_whisper(username, `已切换频道至${set_channel}`)
+};
+
 //获取角色role
 
 const get_role = (username) => {
@@ -78,18 +124,37 @@ const get_role = (username) => {
 
     return role;
 };
+//获取用户频道
+const get_channel = (username) => {
+    const channel = db.get(`userinfo.${username}.channel`).value();
 
+    return channel;
+};
 //获取消息列表
 const get_messages = (username) => {
     const messages = db.get(`userinfo.${username}.message`).value();
 
     return messages;
 };
+//获取用户组
+const get_user_group = (username) => {
+    const user_group = db.get(`userinfo.${username}.userGroup`).value();
+
+    return user_group.toLowerCase();
+}
+
+//是否白名单
+const is_whitelist = (username) => {
+    let whitelist = db.get(`whitelist`).value();
+    //白名单转换大小写
+    const result = whitelist.map(element => element.toLowerCase()).includes(username.toLowerCase());
+    return result
+};
 
 //添加消息
 const add_messages = (message, username, role) => {
     let add_message = { "role": role, "content": message }
-    if (role == "user") {
+    if (role === "user") {
         add_message = { "role": role, "content": `${username}:${message}` }
     }
     // const messages = db.get(`userinfo.${username}.message`).value();
@@ -101,7 +166,7 @@ const add_messages = (message, username, role) => {
 };
 
 // 删除最后的消息
-function deleteMessage(username) {
+const delete_meesage = (username) => {
     const userMessages = db.get(`userinfo.${username}.message`).value();
 
     if (userMessages && userMessages.length > 1) {
@@ -114,31 +179,69 @@ function deleteMessage(username) {
     }
 }
 
+//添加白名单
+const add_whitelist = (username, mess_spilt) => {
+    const setuser = mess_spilt[2];
+    if (setuser === undefined) {
+        bot_say_whisper(username, `请输入添加至白名单的用户名`);
+        return;
+    }
+
+    if (!is_whitelist(setuser)) {
+        db.get('whitelist')
+            .push(setuser)
+            .write();
+        bot_say_whisper(username, `已添加${setuser}至白名单`);
+    } else {
+        bot_say_whisper(username, `${setuser}已在白名单`);
+
+    }
+};
+// 白名单中删除用户
+function remove_whitelist(username, mess_spilt) {
+    const setuser = mess_spilt[2];
+
+    if (setuser === undefined) {
+        bot_say_whisper(username, `请输入添加至白名单的用户名`);
+        return;
+    }
+
+    if (is_whitelist(setuser)) {
+        db.get('whitelist')
+            .pull(setuser)
+            .write();
+        bot_say_whisper(username, `已从白名单移除${setuser}`);
+
+    } else {
+        bot_say_whisper(username, `${setuser}已经不在白名单`);
+    }
+};
+
 //bot说话
 const bot_say = async (message) => {
     //字符串分割
     let result = [];
-    let currentChunk = '';
-    
+    let current_chunk = '';
+    let currentsize = 230;
+
     for (let i = 0; i < message.length; i++) {
         if (message[i] === '\n') {
-            if (currentChunk.length > 0) {
-                result.push(currentChunk);
-                currentChunk = '';
+            if (current_chunk.length > 0) {
+                result.push(current_chunk);
+                current_chunk = '';
             }
         } else {
-            currentChunk += message[i];
-            if (currentChunk.length === 250) {
-                result.push(currentChunk);
-                currentChunk = '';
+            current_chunk += message[i];
+            if (current_chunk.length === currentsize) {
+                result.push(current_chunk);
+                current_chunk = '';
             }
         }
     }
-    
-    if (currentChunk.length > 0) {
-        result.push(currentChunk);
+
+    if (current_chunk.length > 0) {
+        result.push(current_chunk);
     }
-    console.log(result)
     //说话部分
     for (const part of result) {
         bot.chat(part);
@@ -147,10 +250,43 @@ const bot_say = async (message) => {
 
 };
 
+//私聊
+const bot_say_whisper = async (username, message) => {
+    //字符串分割
+    let result = [];
+    let current_chunk = '';
+    let currentsize = 230;
+
+    for (let i = 0; i < message.length; i++) {
+        if (message[i] === '\n') {
+            if (current_chunk.length > 0) {
+                result.push(current_chunk);
+                current_chunk = '';
+            }
+        } else {
+            current_chunk += message[i];
+            if (current_chunk.length === currentsize) {
+                result.push(current_chunk);
+                current_chunk = '';
+            }
+        }
+    }
+
+    if (current_chunk.length > 0) {
+        result.push(current_chunk);
+    }
+    //说话部分
+    for (const part of result) {
+        bot.whisper(username, part);
+        await sleep(1000);
+    }
+
+};
+
+
 const help = (username) => {
 
-    bot_say("1.关键字+ help| 获取帮助 2.关键字 +消息| 发送消息请求 3.关键字 + new +消息（可选）|新对话/新对话请求 4.关键字+role+角色名称|切换角色 5.关键字+undo|撤销这次对话 6.关键字+regen+消息（可选）|重新生成/修改后重新生成 7.关键字+rolelist|获取角色列表 8.关键字+init|初始化个人档案");
-    set_freeze(username, false);
+    bot_say_whisper(username, "请参阅插件的README:https://github.com/TLMEMO/MCChatGPTBot")
 
 }
 
@@ -160,22 +296,21 @@ const is_new_user = (username) => {
     const userExists = db.get('userinfo').has(username).value();
     if (!userExists) {
         db.get('userinfo')
-            .set(username, { "role": "默认", "freeze": false })
+            .set(username, { "role": "默认", "channel": "private", "freeze": false })
             .write();
+        set_user_group("user", username);
         set_role("默认", username);
-
     };
 };
 
-//手动初始化玩家数据库信息，用于出现bug的情况
+//手动初始化玩家数据库信息，用于出现bug的情况,不重置用户组
 const init_db = (username) => {
     db.get('userinfo')
-        .set(username, { "role": "默认", "freeze": false })
+        .get(username)
+        .assign({ "role": "默认", "channel": "private", "freeze": false })
         .write();
     set_role("默认", username);
-    set_freeze(username, false);
-
-    bot_say("已重置")
+    bot_say("已重置");
 
 };
 
@@ -190,8 +325,29 @@ const set_freeze = (username, status) => {
         .get(username)
         .assign({ "freeze": status })
         .write();
-    console.log(status);
 };
+
+//计算记忆是否超过规定长度
+const check_memory = (username) => {
+    const maxLength = argument.max_memory;
+
+    const messages = db.get(`userinfo.${username}.message`).value();
+    let totalLength = messages.reduce((total_length, message) => total_length + message.content.length, 0);
+    // console.log(totalLength)
+
+
+    while (totalLength > maxLength && messages.length > 2) {
+
+        const lengthToRemove = messages[1].content.length + messages[2].content.length;
+        totalLength -= lengthToRemove;
+        // 删除一次问答
+        messages.splice(1, 2);
+
+    }
+    db.set(`userinfo.${username}.message`, messages).write();
+
+
+}
 
 //调用API
 const return_chat = async (username) => {
@@ -217,6 +373,10 @@ const return_chat = async (username) => {
 
 // 新聊天
 const new_chat = async (mess_spilt, username) => {
+
+
+
+
     let role = get_role(username)
     //写入角色
     set_role(role, username);
@@ -228,14 +388,24 @@ const new_chat = async (mess_spilt, username) => {
 
         add_messages(mess_spilt[2], username, "user");
         const get_chat = await return_chat(username);
-        bot_say(get_chat);
         add_messages(get_chat, username, "assistant");
+
+        if (username != "serverPublicMessage") {
+            bot_say_whisper(username, get_chat);
+        }
+        else {
+            bot_say(get_chat);
+        }
 
     }
 
     else {
-
-        bot_say(`@${username},已开始新一轮对话`);
+        if (username != "serverPublicMessage") {
+            bot_say_whisper(username, `已开始新一轮对话`);
+        }
+        else {
+            bot_say(`已开始新一轮对话`);
+        }
     }
     set_freeze(username, false);
 
@@ -249,8 +419,15 @@ const chat = async (mess_spilt, username) => {
     add_messages(mess_spilt[1], username, "user");
 
     const get_chat = await return_chat(username);
-    bot_say(get_chat);
     add_messages(get_chat, username, "assistant");
+
+    if (username != "serverPublicMessage") {
+        bot_say_whisper(username, get_chat);
+    }
+    else {
+        bot_say(get_chat);
+    }
+
     set_freeze(username, false);
 
 };
@@ -264,10 +441,24 @@ const change_role = (mess_spilt, username) => {
             .get(username)
             .assign({ "role": role })
             .write();
-        bot_say(`@${username}成功将角色设定为${role}`)
+        if (username === "serverPublicMessage") {
+            bot_say(`成功将公共消息的角色设定为${role}`)
+
+        }
+        else {
+            bot_say_whisper(username, `成功将角色设定为${role}`)
+
+        }
     }
     else {
-        bot_say("格式错误，请检查")
+        if (username === "serverPublicMessage") {
+            bot_say("修改角色格式错误，请检查")
+
+        }
+        else {
+            bot_say_whisper(username, "修改角色格式错误，请检查")
+
+        }
     }
     set_freeze(username, false);
 
@@ -300,26 +491,33 @@ const role_list = async (username) => {
     }
 
     for (let i = 0; i < result.length; i++) {
-        bot_say(result[i]);
+        bot_say_whisper(username, result[i]);
         await sleep(1000);
     }
-    set_freeze(username, false);
 
 };
 
 //撤销
 const undo = (username) => {
     //删除用户和机器的发言
-    let result = deleteMessage(username);
-    result = deleteMessage(username);
-    if (result == true) {
-        bot_say(`成功撤销 @${username}`);
-
+    let result = delete_meesage(username);
+    result = delete_meesage(username);
+    if (username != "serverPublicMessage") {
+        if (result === true) {
+            bot_say_whisper(username, `成功撤销 @${username}`);
+        }
+        else {
+            bot_say_whisper(username, `无法继续撤销`);
+        };
     }
     else {
-        bot_say(`无法继续撤销 @${username}`);
-
-    };
+        if (result === true) {
+            bot_say(`成功撤销公共对话`);
+        }
+        else {
+            bot_say(`无法继续撤销公共对话`);
+        };
+    }
     set_freeze(username, false);
 
 };
@@ -332,27 +530,48 @@ const regen = async (mess_spilt, username) => {
 
         //附带内容的重新生成
         if (mess_spilt[2] != undefined) {
-            deleteMessage(username);
-            deleteMessage(username);
+            delete_meesage(username);
+            delete_meesage(username);
             //对于大于2个空格的消息，自动合并到位置2
             mess_spilt = merge_string(mess_spilt, 2)
             add_messages(mess_spilt[2], username, "user");
 
             const get_chat = await return_chat(username);
-            bot_say(get_chat);
             add_messages(get_chat, username, "assistant");
+
+            if (username === "serverPublicMessage") {
+                bot_say(get_chat);
+            }
+            else {
+                bot_say_whisper(username, get_chat);
+
+            }
         }
         else {
-            deleteMessage(username);
+            delete_meesage(username);
             const get_chat = await return_chat(username);
-            bot_say(get_chat);
             add_messages(get_chat, username, "assistant");
+
+            if (username === "serverPublicMessage") {
+                bot_say(get_chat);
+            }
+            else {
+                bot_say_whisper(username, get_chat);
+
+            }
 
         }
 
     }
     else {
-        bot_say("该对话不支持重新生成。")
+        if (username === "serverPublicMessage") {
+            bot_say("该对话不支持重新生成。")
+
+        }
+        else {
+            bot_say_whisper(username, "该对话不支持重新生成。")
+
+        }
     }
     set_freeze(username, false);
 
@@ -370,14 +589,19 @@ const process_message = (message) => {
 //对信息进行处理
 
 const command = async (mess_spilt, username) => {
-    //冻起来
+
+
+
     set_freeze(username, true);
 
     if (mess_spilt[1] != undefined) {
+        const read_command = mess_spilt[1].toLowerCase();
+
         //系统指令优先级最高
-        switch (mess_spilt[1]) {
+        switch (read_command) {
             //新对话
             case "new":
+
                 new_chat(mess_spilt, username);
                 return;
             //撤销对话
@@ -392,13 +616,6 @@ const command = async (mess_spilt, username) => {
             case "role":
                 change_role(mess_spilt, username);
                 return;
-            //帮助
-            case "help":
-                help(username);
-                return;
-            case "rolelist":
-                role_list(username);
-                return
         };
 
 
@@ -408,13 +625,7 @@ const command = async (mess_spilt, username) => {
 
 
     }
-    //喊名字的输出
-    if (mess_spilt.length == 1) {
-        bot_say("喂，我在");
-        set_freeze(username, false);
 
-        return;
-    };
 };
 //监测玩家聊天
 
@@ -426,30 +637,148 @@ bot.on('chat', (username, message) => {
         if (mess_spilt[0].toLowerCase().includes(trigger.toLowerCase())) {
             //检测是否为新用户
             is_new_user(username);
-            // 执行命令
 
-            if (mess_spilt[1] == "init") {
-                init_db(username);
-
-            }
-            else if (is_freeze(username) == false) {
-                command(mess_spilt, username);
-
+            //用户使用权限检测
+            if (argument.whitelist === true) {
+                // 使用白名单
+                if (is_whitelist(username) != true) {
+                    bot_say_whisper(username, "你没有bot的使用许可");
+                    return;
+                }
             }
             else {
-                bot_say(`@${username} 你的提交过于频繁，请稍后再试`)
+                //使用黑名单
+                if (get_user_group(username) === "block") {
+                    bot_say_whisper(username, "你没有bot的使用许可");
+                    return;
+                }
+            }
+            //喊名字的输出
+            if (mess_spilt.length === 1) {
+                bot_say("喂，我在");
+                set_freeze(username, false);
 
+                return;
             };
+            //无视公共和私聊的指令
+            const read_command = mess_spilt[1].toLowerCase();
+
+            //手动初始化
+            if (read_command === "init") {
+                init_db(username);
+                return;
+            }
+            //切换频道
+            if (read_command === "channel") {
+                switch_channel(username);
+                return;
+            }
+            //帮助
+            if (read_command === "help") {
+                help(username);
+                return;
+            }
+            //获取角色
+            if (read_command === "rolelist") {
+                role_list(username);
+                return;
+            }
+
+            //管理员命令检查
+            function admin_check(custom_fun) {
+                return function (username, ...args) {
+
+                    if (get_user_group(username) !== "admin") {
+                        bot_say_whisper(username, "你没有权限执行该命令");
+                        return;
+                    }
+                    custom_fun(...args);
+
+                };
+            }
+            //管理员命令设置组
+
+            if (read_command === "setgroup") {
+                const setgroup = admin_check(set_user_group_command);
+                setgroup(username, username, mess_spilt);
+                return;
+            }
+            //添加白名单
+            if (read_command === "addwhitelist") {
+                const addwl = admin_check(add_whitelist);
+                addwl(username, username, mess_spilt);
+                return;
+            }
+            //删除白名单
+            if (read_command === "removewhitelist") {
+                const rmwl = admin_check(remove_whitelist);
+                rmwl(username, username, mess_spilt);
+                return;
+            }
+
+
+            const admin_command_public = ["new", "regen", "undo", "role"];
+            const admin_command_private = [];
+
+            // 执行其他命令
+            if (get_channel(username) === "public") {
+
+
+
+                if (is_freeze("serverPublicMessage") === false) {
+                    //是否是管理员指令
+                    if (get_user_group(username) != "admin") {
+                        if (admin_command_public.some(element => mess_spilt[1].toLowerCase().includes(element))) {
+                            bot_say_whisper(username, "你没有权限执行该命令");
+                            return;
+                        }
+                    };
+
+                    set_freeze("serverPublicMessage", true);
+                    if (read_command != "undo") {
+                        check_memory("serverPublicMessage");
+
+                    }
+
+                    command(mess_spilt, "serverPublicMessage");
+
+                }
+                else {
+                    bot_say(`@${username} 已有正在生成的对话，请稍后再试`)
+
+                };
+            }
+            else {
+                //私聊模式
+                if (is_freeze(username) === false) {
+                    set_freeze(username, true);
+                    if (read_command != "undo") {
+                        check_memory(username);
+
+                    }
+                    command(mess_spilt, username);
+
+                }
+                else {
+                    bot_say_whisper(username, `你的提交过于频繁，请稍后再试`)
+                };
+            };
+
+
         }
     }
     console.log(username, message);
 
 });
 
+// 本来我是要让Bot获取用户私聊来达到私密对话的效果，由于我测试用的服务端bot私聊的消息会在chat被获取到，而不是在whisper中，故消息处理全只能公开处理了
+// bot.on('whisper', (username, message) => { 
+
+//   }) 
 
 const restartBot = async () => {
-        await sleep(5000);
-        return mineflayer.createBot(PlayerInfo);
+    await sleep(5000);
+    return mineflayer.createBot(PlayerInfo);
 };
 
 // 重启bot
@@ -463,8 +792,8 @@ bot.on('kicked', (reason, loggedIn) => {
 
 bot.on('end', (reason) => {
     if (NeedReload) {
-        bot =restartBot(bot);
-        
+        bot = restartBot(bot);
+
     }
     console.log(reason);
 });
@@ -472,10 +801,10 @@ bot.on('end', (reason) => {
 // 监听未处理的异常和拒绝
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
-        bot =restartBot(bot);
+    bot = restartBot(bot);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection:', reason);
-        bot =restartBot(bot);
+    bot = restartBot(bot);
 });
