@@ -596,25 +596,27 @@ const caculate_nether_coordinate = (mess_spilt) => {
     const isSkyblock = mess_spilt[7];
     try
     // 边界检查
-    {if (currentY > 320 || currentY < -64) {
-        bot_say("Y值必须在-64到320之间");
-        return;
+    {
+        if (currentY > 320 || currentY < -64) {
+            bot_say("Y值必须在-64到320之间");
+            return;
+        }
+        if (Math.abs(currentX - centerX) > 4096 || Math.abs(currentZ - centerZ) > 4096) {
+            bot_say("当前X和当前Z不能超过岛屿中心点正负4096的位置");
+            return;
+        }
+
+        const offsetX = currentX - centerX;
+        const offsetZ = currentZ - centerZ;
+
+        const netherX = Math.floor((isSkyblock === "true") ? centerX + offsetX : centerX + offsetX / 8);
+        const netherY = currentY;
+        const netherZ = Math.floor((isSkyblock === "true") ? centerZ + offsetZ : centerZ + offsetZ / 8);
+
+        bot_say('对应地狱坐标为 X=' + netherX + ', Y=' + netherY + ', Z=' + netherZ);
     }
-    if (Math.abs(currentX - centerX) > 4096 || Math.abs(currentZ - centerZ) > 4096) {
-        bot_say("当前X和当前Z不能超过岛屿中心点正负4096的位置");
-        return;
-    }
 
-    const offsetX = currentX - centerX;
-    const offsetZ = currentZ - centerZ;
-
-    const netherX = Math.floor((isSkyblock === "true") ? centerX + offsetX : centerX + offsetX / 8);
-    const netherY = currentY;
-    const netherZ = Math.floor((isSkyblock === "true")  ? centerZ + offsetZ : centerZ + offsetZ / 8);
-
-    bot_say( '对应地狱坐标为 X=' + netherX + ', Y=' + netherY + ', Z=' + netherZ);}
-
-    catch(e){
+    catch (e) {
         bot_say("参数输入错误，请重试。格式：bot启动词 caneco 岛中心坐标X 岛中心坐标Z 当前坐标X 当前坐标Y 当前坐标Z 是否为空岛（true/false\)");
     }
 }
@@ -696,29 +698,29 @@ bot.on('chat', (username, message) => {
             //无视公共和私聊的指令
             const read_command = mess_spilt[1].toLowerCase();
 
-            switch(read_command){
+            switch (read_command) {
                 case "init":
-            //手动初始化
+                    //手动初始化
                     init_db(username);
                     return;
                 case "channel":
-            //切换频道
+                    //切换频道
                     switch_channel(username);
                     return;
                 case "help":
-            //帮助
+                    //帮助
                     help(username);
                     return;
                 case "rolelist":
-            //获取角色
+                    //获取角色
                     role_list(username);
                     return;
                 case "caneco":
-            //计算地狱坐标
-            caculate_nether_coordinate(mess_spilt)
-
+                    //计算地狱坐标
+                    caculate_nether_coordinate(mess_spilt)
+                    return;
             }
-            
+
 
             //管理员命令检查
             function admin_check(custom_fun) {
