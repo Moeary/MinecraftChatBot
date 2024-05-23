@@ -586,6 +586,25 @@ const process_message = (message) => {
 };
 
 //分支功能
+//岛屿中心点计算
+const caculate_island_center = (mess_spilt) => {
+    const id=+mess_spilt[2];
+    // 岛屿1中心点为4096 64 4096,岛屿2中心点为8192 64 4096 岛屿3为4096 64 8192 岛屿4为12288 64 4096 岛屿5为8192 64 8192 岛屿6为4096 64 12288
+    try{
+        if(id<1){
+            bot_say("岛屿编号不能小于1");
+        }
+        const centerX = ((id - 1) % 3 + 1) * 4096;
+        const centerY = 64;
+        const centerZ = (Math.floor((id - 1) / 3) + 1) * 4096;
+
+        bot_say('岛屿'+id+'中心点为 X=' + centerX + ', Y=' + centerY + ', Z=' + centerZ);
+    }
+    catch(e){
+        bot_say("参数输入错误，请重试。格式：bot启动词 caculate_island_center 岛屿编号");
+    }
+}
+//计算地狱坐标
 const caculate_nether_coordinate = (mess_spilt) => {
     //参数检查
     const centerX = +mess_spilt[2];
@@ -721,7 +740,11 @@ bot.on('chat', (username, message) => {
                     return;
                 case "caneco":
                     //计算地狱坐标
-                    caculate_nether_coordinate(mess_spilt)
+                    caculate_nether_coordinate(mess_spilt);
+                    return;
+                case "caisce":
+                    //计算岛屿中心点
+                    caculate_island_center(mess_spilt);
                     return;
             }
 
