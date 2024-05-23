@@ -594,9 +594,13 @@ const caculate_nether_coordinate = (mess_spilt) => {
     const currentY = +mess_spilt[5];
     const currentZ = +mess_spilt[6];
     const isSkyblock = mess_spilt[7];
+    if(centerX ==undefined ||centerZ ==undefined|| currentX ==undefined ||currentY ==undefined ||currentZ ==undefined ||isSkyblock ==undefined)
+{        bot_say("参数输入错误，请重试。格式：bot启动词 caneco 岛中心坐标X 岛中心坐标Z 当前坐标X 当前坐标Y 当前坐标Z 是否为空岛（true/false\)");
+        return;}
     try
     // 边界检查
     {
+
         if (currentY > 320 || currentY < -64) {
             bot_say("Y值必须在-64到320之间");
             return;
